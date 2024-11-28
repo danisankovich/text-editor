@@ -25,13 +25,18 @@ enum editorKey {
 };
 
 // Information
-struct termios orig_termios;
+typedef struct erow {
+    int size;
+    char *chars;
+} erow;
 
 struct editorConfig {
     int cx, cy;
     int screenrows;
     int screencols;
     struct termios orig_termios;
+    int numrows;
+    erow row;
 };
 
 // global variable state
