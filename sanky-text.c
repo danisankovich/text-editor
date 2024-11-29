@@ -35,7 +35,8 @@ typedef struct erow { // erow -> editor row
 } erow;
 
 struct editorConfig {
-    int cx, cy;
+    int coordX, coordY;
+    int rowOffset;
     int screenrows;
     int screencols;
     struct termios orig_termios;
@@ -282,23 +283,24 @@ void abFree(struct abuf *ab) {
 void editorMoveCursor(int key) {
     switch (key) {
         case ARROW_LEFT:
-            if (E.cx != 0) {
-                E.cx--;
+            if (E.coordX != 0) {
+                E.coordX--;
             }
             break;
         case ARROW_RIGHT:
-            if (E.cx != E.screencols - 1) {
-                E.cx++;
+            if (E.coordX != E.screencols - 1) {
+                E.coordX++;
             }
             break;
         case ARROW_UP:
-            if (E.cy != 0) {
-                E.cy--;
+            if (E.coordY != 0) {
+                E.coordY--;
             }
             break;
         case ARROW_DOWN:
-            if (E.cy != E.screenrows - 1) {
-                E.cy++;
+            // allow scrolling past bottom of screen, but not past bottom of file
+            if (E.coordY < E.numrows) {
+                E.coordY++;
             }
             break;
     }
@@ -315,10 +317,10 @@ void editorProcessKeypress() {
             exit(0);
             break;
         case HOME_KEY:
-            E.cx = 0;
+            E.coordX = 0;
             break;
         case END_KEY:
-            E.cx = E.screencols - 1;
+            E.coordX = E.screencols - 1;
             break;
         case PAGE_UP:
         case PAGE_DOWN:
@@ -340,11 +342,23 @@ void editorProcessKeypress() {
 }
 
 // OUTPUT
+void editorScroll() {
+    // check if cursor is above visible window. If so, move to where cursor is
+    if (E.coordY < E.rowOffset) {
+        E.rowOffset = E.coordY;
+    }
+    // check if cursor is below visible window. If so, move 
+    if (E.coordY >= E.rowOffset + E.screenrows) {
+        E.rowOffset = E.coordY - E.screenrows + 1;
+    }
+}
+
 void editorDrawRows(struct abuf *ab) {
     int y;
     // dynamically set screenrows at start
     for (y = 0; y < E.screenrows; y++) {
-        if (y >= E.numrows) {
+        int filerow = y + E.rowOffset;
+        if (filerow >= E.numrows) {
             if (E.numrows == 0 && y == E.screenrows / 3) {
                 char welcome[80];
                 int welcomelen = snprintf(welcome, sizeof(welcome), "Sanky Editor -- Version %s", EDITOR_VERSION);
@@ -368,11 +382,11 @@ void editorDrawRows(struct abuf *ab) {
                 abAppend(ab, "~", 1);
             }
         } else {
-            int len = E.row[y].size;
+            int len = E.row[filerow].size;
             if (len > E.screencols) {
                 len = E.screencols;
             }
-            abAppend(ab, E.row[y].chars, len);
+            abAppend(ab, E.row[filerow].chars, len);
         }
        
 
@@ -386,6 +400,7 @@ void editorDrawRows(struct abuf *ab) {
 }
 
 void editorRefreshScreen() {
+    editorScroll();
     // initialize new abuf ab
     struct abuf ab = ABUF_INIT;
     
@@ -398,7 +413,7 @@ void editorRefreshScreen() {
     editorDrawRows(&ab);
 
     char buf[32];
-    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy + 1, E.cx + 1);
+    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.coordY - E.rowOffset) + 1, E.coordX + 1);
     abAppend(&ab, buf, strlen(buf));
     
     abAppend(&ab, "\x1b[?25h", 6);
@@ -410,9 +425,10 @@ void editorRefreshScreen() {
 // initialize
 
 void initEditor() {
-    E.cx = 0; // horizontal coordinate
-    E.cy = 0; // vertical coordinate
+    E.coordX = 0; // horizontal coordinate
+    E.coordY = 0; // vertical coordinate
     E.numrows = 0;
+    E.rowOffset = 0;
     E.row = NULL;
 
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) {
