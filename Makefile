@@ -1,2 +1,2 @@
-sanky-text: sanky-text.c
-	$(CC) sanky-text.c -o sanky-text -Wall -Wextra -pedantic -std=c99
+text-editor: text-editor.c
+	$(CC) text-editor.c -o text-editor -Wall -Wextra -pedantic -std=c99

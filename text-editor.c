@@ -453,7 +453,7 @@ void initEditor() {
     E.coordY = 0; // vertical coordinate
     E.numrows = 0;
     E.rowOffset = 0;
-    E.colOffset;
+    E.colOffset = 0;
     E.row = NULL;
 
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) {
