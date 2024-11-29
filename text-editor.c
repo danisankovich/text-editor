@@ -287,11 +287,17 @@ void editorMoveCursor(int key) {
         case ARROW_LEFT:
             if (E.coordX != 0) {
                 E.coordX--;
+            } else if (E.coordY > 0) { // if <- at start of line, move up
+                E.coordY--;
+                E.coordX = E.row[E.coordY].size;
             }
             break;
         case ARROW_RIGHT:
             if (row && E.coordX < row->size) {
                 E.coordX++;
+            } else if (row && E.coordX == row->size) { // if -> at end of line, move down
+                E.coordY++;
+                E.coordX = 0;
             }
             break;
         case ARROW_UP:
