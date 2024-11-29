@@ -37,6 +37,7 @@ typedef struct erow { // erow -> editor row
 struct editorConfig {
     int coordX, coordY;
     int rowOffset;
+    int colOffset;
     int screenrows;
     int screencols;
     struct termios orig_termios;
@@ -281,6 +282,7 @@ void abFree(struct abuf *ab) {
 
 // INPUT
 void editorMoveCursor(int key) {
+    erow *row = (E.coordY >= E.numrows) ? NULL : &E.row[E.coordY];
     switch (key) {
         case ARROW_LEFT:
             if (E.coordX != 0) {
@@ -288,7 +290,7 @@ void editorMoveCursor(int key) {
             }
             break;
         case ARROW_RIGHT:
-            if (E.coordX != E.screencols - 1) {
+            if (row && E.coordX < row->size) {
                 E.coordX++;
             }
             break;
@@ -303,6 +305,12 @@ void editorMoveCursor(int key) {
                 E.coordY++;
             }
             break;
+    }
+
+    row = (E.coordY >= E.numrows) ? NULL : &E.row[E.coordY];
+    int rowLength = row ? row->size : 0;
+    if (E.coordX > rowLength) {
+        E.coordX = rowLength;
     }
 }
 
@@ -351,6 +359,12 @@ void editorScroll() {
     if (E.coordY >= E.rowOffset + E.screenrows) {
         E.rowOffset = E.coordY - E.screenrows + 1;
     }
+    if (E.coordX < E.colOffset) {
+        E.colOffset = E.coordX;
+    }
+    if (E.coordX >= E.colOffset + E.screencols) {
+        E.colOffset = E.coordX - E.screencols + 1;
+    }
 }
 
 void editorDrawRows(struct abuf *ab) {
@@ -382,11 +396,15 @@ void editorDrawRows(struct abuf *ab) {
                 abAppend(ab, "~", 1);
             }
         } else {
-            int len = E.row[filerow].size;
+            int len = E.row[filerow].size - E.colOffset;
+            // len = 0 prevents colOffset from making len a negative number/past the end of line
+            if (len < 0) {
+                len = 0;
+            }
             if (len > E.screencols) {
                 len = E.screencols;
             }
-            abAppend(ab, E.row[filerow].chars, len);
+            abAppend(ab, &E.row[filerow].chars[E.colOffset], len);
         }
        
 
@@ -413,7 +431,7 @@ void editorRefreshScreen() {
     editorDrawRows(&ab);
 
     char buf[32];
-    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.coordY - E.rowOffset) + 1, E.coordX + 1);
+    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.coordY - E.rowOffset) + 1, (E.coordX - E.colOffset) + 1);
     abAppend(&ab, buf, strlen(buf));
     
     abAppend(&ab, "\x1b[?25h", 6);
@@ -429,6 +447,7 @@ void initEditor() {
     E.coordY = 0; // vertical coordinate
     E.numrows = 0;
     E.rowOffset = 0;
+    E.colOffset;
     E.row = NULL;
 
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) {
