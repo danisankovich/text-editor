@@ -20,6 +20,7 @@
 #define CTRL_KEY(key) ((key) & 0x1f)
 
 enum editorKey {
+    BACKSPACE = 127,
     ARROW_LEFT = 1000,
     ARROW_RIGHT,
     ARROW_UP,
@@ -28,7 +29,7 @@ enum editorKey {
     PAGE_DOWN,
     HOME_KEY,
     END_KEY,
-    DEL_KEY
+    DEL_KEY,
 };
 
 // Information
@@ -274,6 +275,29 @@ void editorAppendRow(char *s, size_t len) {
     E.numrows++;
 }
 
+void editorRowInsertChar(erow *row, int at, int c) {
+    if (at < 0 || at > row->size) {
+        at = row->size;
+    }
+
+    row->chars = realloc(row->chars, row->size + 2);
+
+    memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
+    row->size++;
+    row->chars[at] = c;
+    editorUpdateRow(row);
+}
+
+// ops
+
+void editorInsertChar(int c) {
+    if (E.coordY == E.numrows) {
+        editorAppendRow("", 0);
+    }
+    editorRowInsertChar(&E.row[E.coordY], E.coordX, c);
+    E.coordX++;
+}
+
 // file handling
 void editorOpen(char *filename) {
     free(E.filename);
@@ -369,6 +393,8 @@ void editorProcessKeypress() {
     int c = editorReadKey();
 
     switch(c) {
+        case '\r':
+            break;
         case CTRL_KEY('q'):
             // clear screen then exist when ctrl-q
             write(STDOUT_FILENO, "\x1b[2J", 4);
@@ -382,6 +408,10 @@ void editorProcessKeypress() {
             if (E.coordY < E.numrows) {
                 E.coordX = E.row[E.coordY].size;
             }
+            break;
+        case BACKSPACE:
+        case CTRL_KEY('h'):
+        case DEL_KEY:
             break;
         case PAGE_UP:
         case PAGE_DOWN: // scroll up/down an entire page
@@ -404,6 +434,13 @@ void editorProcessKeypress() {
         case ARROW_LEFT:
         case ARROW_RIGHT:
             editorMoveCursor(c);
+            break;
+        case CTRL_KEY('l'):
+        case '\x1b':
+            break;
+        // add character not mapped above
+        default:
+            editorInsertChar(c);
             break;
     }
 }
