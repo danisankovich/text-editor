@@ -568,16 +568,42 @@ int editorRowRenderXToCoordX(erow *row, int rx) {
 }
 
 void searchCB(char *term, int key) {
+    static int prev_match = -1;
+    static int dir = 1;
+
     if (key == '\r' || key == '\x1b') {
+        prev_match = -1;
+        dir = 1;
         return;
+    } else if (key == ARROW_RIGHT || key == ARROW_DOWN) {
+        dir = 1;
+    } else if (key == ARROW_LEFT || key == ARROW_UP) {
+        dir = -1;
+    } else {
+        prev_match = -1;
+        dir = 1;
     }
+
+    if (prev_match == -1) {
+        dir = 1;
+    }
+
+    int current = prev_match;
 
     int i;
     for (i = 0; i < E.numrows; i++) {
-        erow *row = &E.row[i];
+        current += dir;
+        if (current == -1) {
+            current = E.numrows - 1;
+        } else if (current == E.numrows) {
+            current = 0;
+        }
+
+        erow *row = &E.row[current];
         char *match = strstr(row->render, term);
         if (match) {
-            E.coordY = i;
+            prev_match = current;
+            E.coordY = current;
             E.coordX = editorRowRenderXToCoordX(row, match - row->render);
             E.rowOffset = E.numrows;
             break;
@@ -586,10 +612,20 @@ void searchCB(char *term, int key) {
 }
 
 void search() {
-    char *term = editorPrompt("Search: %s (Press ESC to Cancel)", searchCB);
+    int stored_coordX = E.coordX;
+    int stored_coordY = E.coordY;
+    int stored_colOffset = E.colOffset;
+    int stored_rowOffset = E.rowOffset;
+
+    char *term = editorPrompt("Search: %s (Press ESC/Arrows/Enter)", searchCB);
 
     if (term) {
         free(term);
+    } else {
+        E.coordX = stored_coordX;
+        E.coordY = stored_coordY;
+        E.colOffset = stored_colOffset;
+        E.rowOffset = stored_rowOffset;
     }
 }
 
