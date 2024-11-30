@@ -74,7 +74,7 @@ void editorSetStatusMessage(const char *fmt, ...) {
 
 void editorRefreshScreen();
 
-char *editorPrompt(char *prompt);
+char *editorPrompt(char *prompt, void(*callback)(char *, int));
 
 // kill program on error
 void die(const char *s) {
@@ -444,9 +444,9 @@ void editorOpen(char *filename) {
     E.isDirty = 0;
 }
 
-void editorSave() {
+void saveFile() {
     if (E.filename == NULL) {
-        E.filename = editorPrompt("Save As: %s (Press ESC to cancel)");
+        E.filename = editorPrompt("Save As: %s (Press ESC to cancel)", NULL);
         if (E.filename == NULL) {
             editorSetStatusMessage("Save Aborted");
             return;
@@ -501,7 +501,7 @@ void abFree(struct abuf *ab) {
 
 
 // INPUT
-char *editorPrompt(char *prompt) {
+char *editorPrompt(char *prompt, void (*callback)(char *, int)) {
     size_t bufsize = 128;
     char *buf = malloc(bufsize);
     
@@ -521,11 +521,17 @@ char *editorPrompt(char *prompt) {
             }
         } else if (c == '\x1b') {
             editorSetStatusMessage("");
+            if (callback) {
+                callback(buf, c);
+            }
             free(buf);
             return NULL;
         } else if (c == '\r') {
             if (buflen != 0) {
                 editorSetStatusMessage("");
+                if (callback) {
+                    callback(buf, c);
+                }
                 return buf;
             }
         } else if (!iscntrl(c) && c < 128) {
@@ -535,6 +541,9 @@ char *editorPrompt(char *prompt) {
             }
             buf[buflen++] = c;
             buf[buflen] = '\0';
+        }
+        if (callback) {
+            callback(buf, c);
         }
     }
 }
@@ -558,10 +567,8 @@ int editorRowRenderXToCoordX(erow *row, int rx) {
     return coordX;
 }
 
-void search() {
-    char *term = editorPrompt("Search: %s (Press ESC to Cancel)");
-
-    if (term == NULL) {
+void searchCB(char *term, int key) {
+    if (key == '\r' || key == '\x1b') {
         return;
     }
 
@@ -576,7 +583,14 @@ void search() {
             break;
         }
     }
-    free(term);
+}
+
+void search() {
+    char *term = editorPrompt("Search: %s (Press ESC to Cancel)", searchCB);
+
+    if (term) {
+        free(term);
+    }
 }
 
 void editorMoveCursor(int key) {
@@ -638,7 +652,7 @@ void editorProcessKeypress() {
             exit(0);
             break;
         case CTRL_KEY('s'):
-            editorSave();
+            saveFile();
             break;
         case HOME_KEY:
             E.coordX = 0;
