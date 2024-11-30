@@ -539,6 +539,46 @@ char *editorPrompt(char *prompt) {
     }
 }
 
+
+// convert renderx to a coordX
+int editorRowRenderXToCoordX(erow *row, int rx) {
+    int curr_rx = 0;
+    int coordX;
+    
+    for (coordX = 0; coordX < row->size; coordX++) {
+        if (row->chars[coordX] == '\t') {
+            curr_rx += (TAB_LENGTH_STOP - 1) - (curr_rx % TAB_LENGTH_STOP);
+        }
+        curr_rx++;
+
+        if (curr_rx > rx) {
+            return coordX;
+        }
+    }
+    return coordX;
+}
+
+void search() {
+    char *term = editorPrompt("Search: %s (Press ESC to Cancel)");
+
+    if (term == NULL) {
+        return;
+    }
+
+    int i;
+    for (i = 0; i < E.numrows; i++) {
+        erow *row = &E.row[i];
+        char *match = strstr(row->render, term);
+        if (match) {
+            E.coordY = i;
+            E.coordX = editorRowRenderXToCoordX(row, match - row->render);
+            E.rowOffset = E.numrows;
+            break;
+        }
+    }
+    free(term);
+}
+
 void editorMoveCursor(int key) {
     erow *row = (E.coordY >= E.numrows) ? NULL : &E.row[E.coordY];
     switch (key) {
@@ -607,6 +647,9 @@ void editorProcessKeypress() {
             if (E.coordY < E.numrows) {
                 E.coordX = E.row[E.coordY].size;
             }
+            break;
+        case CTRL_KEY('f'):
+            search();
             break;
         case BACKSPACE:
         case CTRL_KEY('h'):
@@ -825,7 +868,7 @@ int main(int argc, char *argv[]) {
         editorOpen(argv[1]);
     }
 
-    editorSetStatusMessage("HELP: Ctrl-Q = quit | Ctrl-S = save");
+    editorSetStatusMessage("HELP: Ctrl-Q = quit | Ctrl-S = save | CTRL-F = find");
 
     while (1) {
         editorRefreshScreen();
