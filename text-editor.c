@@ -77,7 +77,7 @@ void editorRefreshScreen();
 char *editorPrompt(char *prompt, void(*callback)(char *, int));
 
 // kill program on error
-void die(const char *s) {
+void end(const char *s) {
     // clear screen when program exits
     write(STDOUT_FILENO, "\x1b[2J", 4);
     write(STDOUT_FILENO, "\x1b[H", 3);
@@ -91,13 +91,13 @@ void die(const char *s) {
 // turn off raw mode when user exits program
 void disableRawMode() {
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1) {
-        die("tcsetattr");
+        end("tcsetattr");
     }
 }
 
 void enableRawMode() {
     if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1) {
-        die("tcgetattr");
+        end("tcgetattr");
     };
     atexit(disableRawMode);
 
@@ -119,7 +119,7 @@ void enableRawMode() {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) {
-        die("tcsetattr");
+        end("tcsetattr");
     }
 }
 
@@ -128,7 +128,7 @@ int editorReadKey() {
     char c;
     while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
         if (nread == -1 && errno != EAGAIN) {
-            die("read");
+            end("read");
         }
     }
 
@@ -425,7 +425,7 @@ void editorOpen(char *filename) {
 
     FILE *fp = fopen(filename, "r");
     if (!fp) {
-        die("fopen");
+        end("fopen");
     }
 
     char *line = NULL;
@@ -906,7 +906,7 @@ void initEditor() {
     E.statusmsg_time = 0;
 
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) {
-        die("getWindowSize");
+        end("getWindowSize");
     }
     E.screenrows -= 2;
 }
