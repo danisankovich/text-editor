@@ -34,12 +34,18 @@ enum editorKey {
     DEL_KEY,
 };
 
+enum editorHighlight {
+    HL_NORMAL = 0,
+    HL_NUMBER
+};
+
 // Information
 typedef struct erow { // erow -> editor row
     int size;
     int renderSize; // content size of render
     char *chars;
     char *render;
+    unsigned char *highlight;
 } erow;
 
 struct editorConfig {
@@ -246,6 +252,29 @@ int getWindowSize(int *rows, int *cols) {
     }
 }
 
+// Sytanx-styles
+
+void editorSyntaxStyle(erow *row) {
+    row->highlight = realloc(row->highlight, row->renderSize);
+    
+    // set all characters to highlight normal by default
+    memset(row->highlight, HL_NORMAL, row->renderSize);
+
+    int i;
+    for (i = 0; i < row->renderSize; i++) {
+        if (isdigit(row->render[i])) {
+            row->highlight[i] = HL_NUMBER;
+        }
+    }
+}
+
+int editorSyntaxColoring(int highlight) {
+    switch(highlight) {
+        case HL_NUMBER: return 31;
+        default: return 37;
+    }
+}
+
 // ROWS
 
 void editorUpdateRow(erow *row) {
@@ -273,6 +302,8 @@ void editorUpdateRow(erow *row) {
     }
     row->render[idx] = '\0';
     row->renderSize = idx;
+
+    editorSyntaxStyle(row);
 }
 
 void editorAppendRow(int at, char *s, size_t len) {
@@ -290,6 +321,7 @@ void editorAppendRow(int at, char *s, size_t len) {
 
     E.row[at].renderSize = 0;
     E.row[at].render = NULL;
+    E.row[at].highlight = NULL;
     editorUpdateRow(&E.row[at]);
 
     E.numrows++;
@@ -299,6 +331,7 @@ void editorAppendRow(int at, char *s, size_t len) {
 void editorFreeRow(erow *row) {
     free(row->render);
     free(row->chars);
+    free(row->highlight);
 }
 
 void editorDelRow(int at) {
@@ -815,10 +848,37 @@ void editorDrawRows(struct abuf *ab) {
             if (len > E.screencols) {
                 len = E.screencols;
             }
-            abAppend(ab, &E.row[filerow].render[E.colOffset], len);
+
+            char *c = &E.row[filerow].render[E.colOffset];
+            unsigned char *highlight = &E.row[filerow].highlight[E.colOffset];
+            int current_color = -1;
+
+            int j;
+            for (j = 0; j < len; j++) {
+                if (highlight[j] == HL_NORMAL) {
+                    if (current_color != -1) {
+                        abAppend(ab, "\x1b[39m", 5);
+                        current_color = -1;
+                    }
+
+                    abAppend(ab, &c[j], 1);
+                } else {
+                    int color = editorSyntaxColoring(highlight[j]);
+
+                    if (color != current_color) {
+                        current_color = color;
+                        char buf[16];
+                        int clen = snprintf(buf, sizeof(buf), "\x1b[%dm", color);
+                        abAppend(ab, buf, clen);
+                    }
+
+                    abAppend(ab, &c[j], 1);
+                }
+            }
+            
+            abAppend(ab, "\x1b[39m", 5);
         }
        
-
         // clear line -> esc[K
         abAppend(ab, "\x1b[K", 3);
         abAppend(ab, "\r\n", 2);
