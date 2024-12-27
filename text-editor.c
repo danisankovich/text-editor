@@ -36,7 +36,8 @@ enum editorKey {
 
 enum editorHighlight {
     HL_NORMAL = 0,
-    HL_NUMBER
+    HL_NUMBER,
+    HL_MATCH
 };
 
 // Information
@@ -270,8 +271,12 @@ void editorSyntaxStyle(erow *row) {
 
 int editorSyntaxColoring(int highlight) {
     switch(highlight) {
-        case HL_NUMBER: return 31;
-        default: return 37;
+        case HL_NUMBER: 
+            return 31;
+        case HL_MATCH: 
+            return 34;
+        default:
+            return 37;
     }
 }
 
@@ -604,6 +609,15 @@ void searchCB(char *term, int key) {
     static int prev_match = -1;
     static int dir = 1;
 
+    static int saved_highlight_line;
+    static char *saved_highlight = NULL;
+
+    if (saved_highlight) {
+        memcpy(E.row[saved_highlight_line].highlight, saved_highlight, E.row[saved_highlight_line].renderSize);
+        free(saved_highlight);
+        saved_highlight = NULL;
+    }
+
     if (key == '\r' || key == '\x1b') {
         prev_match = -1;
         dir = 1;
@@ -639,6 +653,12 @@ void searchCB(char *term, int key) {
             E.coordY = current;
             E.coordX = editorRowRenderXToCoordX(row, match - row->render);
             E.rowOffset = E.numrows;
+
+            saved_highlight_line = current;
+            saved_highlight = malloc(row->renderSize);
+            memcpy(saved_highlight, row->highlight, row->renderSize);
+
+            memset(&row->highlight[match - row->render], HL_MATCH, strlen(term));
             break;
         }
     }
@@ -875,7 +895,7 @@ void editorDrawRows(struct abuf *ab) {
                     abAppend(ab, &c[j], 1);
                 }
             }
-            
+
             abAppend(ab, "\x1b[39m", 5);
         }
        
