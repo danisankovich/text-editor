@@ -255,6 +255,7 @@ int getWindowSize(int *rows, int *cols) {
 
 // Sytanx-styles
 
+// check if character is space, null byte, or certain special character
 int is_separator(int c) {
     return isspace(c) || c =='\0' || strchr(",.()+-/*=~%<>[];", c) != NULL;
 }
@@ -265,13 +266,20 @@ void editorSyntaxStyle(erow *row) {
     // set all characters to highlight normal by default
     memset(row->highlight, HL_NORMAL, row->renderSize);
 
+    int prev_sep = 1; // default to true
     int i = 0;
     while (i < row->renderSize) {
         char c = row->render[i];
+        unsigned char prev_highlight = (i > 0) ? row->highlight[i - 1] : HL_NORMAL;
 
-        if (isdigit(c)) {
+        if ((isdigit(c) && (prev_sep || prev_highlight == HL_NUMBER)) || (c == '.' && prev_highlight == HL_NUMBER)) {
             row->highlight[i] = HL_NUMBER;
+            i++;
+            prev_sep = 0;
+            continue;
         }
+
+        prev_sep = is_separator(c);
 
         i++;
     }
