@@ -255,17 +255,25 @@ int getWindowSize(int *rows, int *cols) {
 
 // Sytanx-styles
 
+int is_separator(int c) {
+    return isspace(c) || c =='\0' || strchr(",.()+-/*=~%<>[];", c) != NULL;
+}
+
 void editorSyntaxStyle(erow *row) {
     row->highlight = realloc(row->highlight, row->renderSize);
     
     // set all characters to highlight normal by default
     memset(row->highlight, HL_NORMAL, row->renderSize);
 
-    int i;
-    for (i = 0; i < row->renderSize; i++) {
-        if (isdigit(row->render[i])) {
+    int i = 0;
+    while (i < row->renderSize) {
+        char c = row->render[i];
+
+        if (isdigit(c)) {
             row->highlight[i] = HL_NUMBER;
         }
+
+        i++;
     }
 }
 
