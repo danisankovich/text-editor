@@ -38,6 +38,7 @@ enum editorKey {
 
 enum editorHighlight {
     HL_NORMAL = 0,
+    HL_COMMENT,
     HL_STRING,
     HL_NUMBER,
     HL_MATCH
@@ -48,6 +49,7 @@ enum editorHighlight {
 struct editorSyntax {
     char *filetype;
     char **filematch;
+    char *singleline_comment_start;
     int flags;
 };
 
@@ -85,6 +87,7 @@ struct editorSyntax HL_DB[] = {
     {
         "c",
         C_HL_extensions,
+        "//",
         HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
     },
 };
@@ -294,6 +297,9 @@ void editorSyntaxStyle(erow *row) {
     memset(row->highlight, HL_NORMAL, row->renderSize);
     if (E.syntax == NULL) return; // if no filetype, return immediately
 
+    char *scs = E.syntax->singleline_comment_start;
+    int scs_len = scs ? strlen(scs) : 0;
+
     int prev_sep = 1; // default to true
     int in_string = 0; // tracks if we are currently in a string
 
@@ -302,15 +308,22 @@ void editorSyntaxStyle(erow *row) {
         char c = row->render[i];
         unsigned char prev_highlight = (i > 0) ? row->highlight[i - 1] : HL_NORMAL;
 
+        if (scs_len && !in_string) {
+            // strncmp -> check and compare first character of the strings
+            if (!strncmp(&row->render[i], scs, scs_len)) {
+                memset(&row->highlight[i], HL_COMMENT, row->renderSize - 1);
+                break;
+            }
+        }
         if (E.syntax->flags & HL_HIGHLIGHT_STRINGS) {
             if (in_string) {
                 row->highlight[i] = HL_STRING;
 
-                // if (c == '\\' && i + 1 < row->renderSize) {
-                //     row->highlight[i + 1] = HL_STRING;
-                //     i += 2;
-                //     continue;
-                // }
+                if (c == '\\' && i + 1 < row->renderSize) {
+                    row->highlight[i + 1] = HL_STRING;
+                    i += 2;
+                    continue;
+                }
 
                 if (c == in_string) {
                     in_string = 0;
@@ -345,6 +358,8 @@ void editorSyntaxStyle(erow *row) {
 
 int editorSyntaxColoring(int highlight) {
     switch(highlight) {
+        case HL_COMMENT:
+            return 36;
         case HL_STRING:
             return 35;
         case HL_NUMBER: 
