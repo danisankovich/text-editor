@@ -21,6 +21,7 @@
 #define CTRL_KEY(key) ((key) & 0x1f)
 #define REMAINING_QUIT_ATTEMPTS 3
 #define HL_HIGHLIGHT_NUMBERS (1<<0)
+#define HL_HIGHLIGHT_STRINGS (1<<1)
 
 enum editorKey {
     BACKSPACE = 127,
@@ -37,6 +38,7 @@ enum editorKey {
 
 enum editorHighlight {
     HL_NORMAL = 0,
+    HL_STRING,
     HL_NUMBER,
     HL_MATCH
 };
@@ -83,7 +85,7 @@ struct editorSyntax HL_DB[] = {
     {
         "c",
         C_HL_extensions,
-        HL_HIGHLIGHT_NUMBERS
+        HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
     },
 };
 
@@ -290,14 +292,41 @@ void editorSyntaxStyle(erow *row) {
     
     // set all characters to highlight normal by default
     memset(row->highlight, HL_NORMAL, row->renderSize);
-
     if (E.syntax == NULL) return; // if no filetype, return immediately
 
     int prev_sep = 1; // default to true
+    int in_string = 0; // tracks if we are currently in a string
+
     int i = 0;
     while (i < row->renderSize) {
         char c = row->render[i];
         unsigned char prev_highlight = (i > 0) ? row->highlight[i - 1] : HL_NORMAL;
+
+        if (E.syntax->flags & HL_HIGHLIGHT_STRINGS) {
+            if (in_string) {
+                row->highlight[i] = HL_STRING;
+
+                // if (c == '\\' && i + 1 < row->renderSize) {
+                //     row->highlight[i + 1] = HL_STRING;
+                //     i += 2;
+                //     continue;
+                // }
+
+                if (c == in_string) {
+                    in_string = 0;
+                } 
+                i++;
+                prev_sep = 1;
+                continue;
+            } else {
+                if (c == '"' || c == '\'') {
+                    in_string = c;
+                    row->highlight[i] = HL_STRING;
+                    i++;
+                    continue;
+                }
+            }
+        }
 
         if (E.syntax->flags & HL_HIGHLIGHT_NUMBERS) { // check if numbers should be highlighted for the given filetype 
             if ((isdigit(c) && (prev_sep || prev_highlight == HL_NUMBER)) || (c == '.' && prev_highlight == HL_NUMBER)) {
@@ -316,6 +345,8 @@ void editorSyntaxStyle(erow *row) {
 
 int editorSyntaxColoring(int highlight) {
     switch(highlight) {
+        case HL_STRING:
+            return 35;
         case HL_NUMBER: 
             return 31;
         case HL_MATCH: 
@@ -342,6 +373,13 @@ void editorSelectSyntaxHighlight() {
             // strcmp -> returns 0 if two strings are equal
             if ((is_ext && ext && !strcmp(ext, s->filematch[i])) || !(is_ext && strstr(E.filename, s->filematch[i]))) {
                 E.syntax = s;
+
+                int filerow;
+                // loop through rows in a file and apply syntax highlight
+                for (filerow = 0; filerow < E.numrows; filerow++) {
+                    editorSyntaxStyle(&E.row[filerow]);
+                }
+
                 return;
             }
             i++;
