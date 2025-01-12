@@ -20,6 +20,7 @@
 #define TAB_LENGTH_STOP 8
 #define CTRL_KEY(key) ((key) & 0x1f)
 #define REMAINING_QUIT_ATTEMPTS 3
+#define HL_HIGHLIGHT_NUMBERS (1<<0)
 
 enum editorKey {
     BACKSPACE = 127,
@@ -41,6 +42,13 @@ enum editorHighlight {
 };
 
 // Information
+
+struct editorSyntax {
+    char *filetype;
+    char **filematch;
+    int flags;
+};
+
 typedef struct erow { // erow -> editor row
     int size;
     int renderSize; // content size of render
@@ -56,6 +64,7 @@ struct editorConfig {
     int colOffset;
     int screenrows;
     int screencols;
+    struct editorSyntax *syntax;
     struct termios orig_termios;
     int numrows;
     erow *row;
@@ -64,6 +73,22 @@ struct editorConfig {
     time_t statusmsg_time;
     int isDirty;
 };
+
+// Filetypes
+
+char *C_HL_extensions[] = { ".c", ".h", ".cpp", NULL };
+
+// HL_DB -> highlight database
+struct editorSyntax HL_DB[] = {
+    {
+        "c",
+        C_HL_extensions,
+        HL_HIGHLIGHT_NUMBERS
+    },
+};
+
+// store length of highlight database array
+#define HL_DB_ENTRIES (sizeof(HL_DB) / sizeof(HL_DB[0]))
 
 // global variable state
 struct editorConfig E;
@@ -266,17 +291,21 @@ void editorSyntaxStyle(erow *row) {
     // set all characters to highlight normal by default
     memset(row->highlight, HL_NORMAL, row->renderSize);
 
+    if (E.syntax == NULL) return; // if no filetype, return immediately
+
     int prev_sep = 1; // default to true
     int i = 0;
     while (i < row->renderSize) {
         char c = row->render[i];
         unsigned char prev_highlight = (i > 0) ? row->highlight[i - 1] : HL_NORMAL;
 
-        if ((isdigit(c) && (prev_sep || prev_highlight == HL_NUMBER)) || (c == '.' && prev_highlight == HL_NUMBER)) {
-            row->highlight[i] = HL_NUMBER;
-            i++;
-            prev_sep = 0;
-            continue;
+        if (E.syntax->flags & HL_HIGHLIGHT_NUMBERS) { // check if numbers should be highlighted for the given filetype 
+            if ((isdigit(c) && (prev_sep || prev_highlight == HL_NUMBER)) || (c == '.' && prev_highlight == HL_NUMBER)) {
+                row->highlight[i] = HL_NUMBER;
+                i++;
+                prev_sep = 0;
+                continue;
+            }
         }
 
         prev_sep = is_separator(c);
@@ -293,6 +322,30 @@ int editorSyntaxColoring(int highlight) {
             return 34;
         default:
             return 37;
+    }
+}
+
+void editorSelectSyntaxHighlight() {
+    E.syntax = NULL;
+    if (E.filename == NULL) return;
+
+    // strrchr -> returns pointer to the last occurence of a character in a string
+    char *ext = strrchr(E.filename, '.');
+
+    for (unsigned int j = 0; j < HL_DB_ENTRIES; j++) {
+        struct editorSyntax *s = &HL_DB[j];
+        unsigned int i = 0;
+
+        while (s->filematch[i]) {
+            int is_ext = (s->filematch[i][0] == '.');
+            
+            // strcmp -> returns 0 if two strings are equal
+            if ((is_ext && ext && !strcmp(ext, s->filematch[i])) || !(is_ext && strstr(E.filename, s->filematch[i]))) {
+                E.syntax = s;
+                return;
+            }
+            i++;
+        }
     }
 }
 
@@ -477,6 +530,8 @@ void editorOpen(char *filename) {
     // strdup -> makes a copy of given string, alloc memory for it, assuming you'll free it
     E.filename = strdup(filename);
 
+    editorSelectSyntaxHighlight();
+
     FILE *fp = fopen(filename, "r");
     if (!fp) {
         end("fopen");
@@ -505,6 +560,7 @@ void saveFile() {
             editorSetStatusMessage("Save Aborted");
             return;
         }
+        editorSelectSyntaxHighlight();
     }
 
     int len;
@@ -929,7 +985,8 @@ void editorDrawStatusBar(struct abuf *ab) {
 
     int len = snprintf(status, sizeof(status), "%.20s - %d lines %s", E.filename ? E.filename : "[No Name]", E.numrows, E.isDirty ? "(modified)" : "");
     
-    int rlen = snprintf(rstatus, sizeof(rstatus), "%d/%d", E.coordY + 1, E.numrows);
+    int rlen = snprintf(rstatus, sizeof(rstatus), "%s | %d/%d", E.syntax ? E.syntax->filetype : "no FT", E.coordY + 1, E.numrows);
+    
     if (len > E.screencols) {
         len = E.screencols;
     }
@@ -1000,6 +1057,7 @@ void initEditor() {
     E.isDirty = 0;
     E.statusmsg[0] = '\0';
     E.statusmsg_time = 0;
+    E.syntax = NULL; // Null -> no filetype/no syntax highlight
 
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) {
         end("getWindowSize");
